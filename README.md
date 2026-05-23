@@ -1,6 +1,6 @@
 # 天枢安册 · TianshuAnce
 
-!()[./figure/demo.png]
+![](./figure/demo.png)
 
 > 墨甲编排器 (Mojia Orchestrator) — 自主安全扫描代理引擎
 
