@@ -8,15 +8,13 @@ useHead({
 })
 
 const title = 'Nuxt Starter Template'
-const description =
-  'A production-ready starter template powered by Nuxt UI. Build beautiful, accessible, and performant applications in minutes, not hours.'
+const description = `A production-ready starter template powered by Nuxt UI. Build beautiful, accessible, and performant applications in minutes, not hours.`
 
 useSeoMeta({
   title,
   description,
   ogTitle: title,
   ogDescription: description,
-  ogImage: 'https://ui.nuxt.com/assets/templates/nuxt/starter-light.png',
   twitterCard: 'summary_large_image'
 })
 </script>
@@ -27,7 +25,8 @@ useSeoMeta({
       <NuxtPage />
     </UMain>
 
-    <UFooter>
+    <!--  Commented Temporary for now  -->
+    <!-- <UFooter>
       <template #left>
         <p class="text-sm text-muted">
           哪吒网络安全-钟智强 • © {{ new Date().getFullYear() }}
@@ -44,6 +43,6 @@ useSeoMeta({
           variant="ghost"
         />
       </template>
-    </UFooter>
+    </UFooter> -->
   </UApp>
 </template>

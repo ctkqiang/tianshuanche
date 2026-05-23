@@ -1,153 +1,108 @@
-// DeepSeek AI 安全扫描代理
-// 先执行真实 HTTP/SSL/DNS 检查，再将结果交给 AI 分析
+// 墨甲编排器 · 自主代理扫描引擎
+// 每一步基于前一步结果自动决策，链式执行直到完成
+
+import { execSync } from "node:child_process";
+
+function exec(cmd: string, timeout = 8000): string {
+  try { return execSync(cmd + " 2>&1 | head -20", { timeout, encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 }).trim(); }
+  catch (e: any) { return e.stdout || e.stderr || `[ERR] ${e.message}`; }
+}
+function has(cmd: string): boolean {
+  try { execSync(`which ${cmd} 2>/dev/null || command -v ${cmd} 2>/dev/null`, { timeout: 2000 }); return true; }
+  catch { return false; }
+}
+
+// 工具注册表: [名称, 命令模板, 前置条件, 触发条件正则]
+interface StepDef { tool: string; cmd: (host: string) => string; requires: string; trigger?: RegExp; category: string }
+const STEPS: StepDef[] = [
+  { tool: "DNS Lookup", cmd: h => `dig +short A ${h} && dig +short MX ${h}`, requires: "dig", trigger: /.*/, category: "recon" },
+  { tool: "WHOIS", cmd: h => `whois ${h} | head -25`, requires: "whois", trigger: /.*/, category: "recon" },
+  { tool: "HTTP Probe", cmd: h => `curl -sI -m 10 http://${h}/ 2>&1; curl -sI -m 10 https://${h}/ 2>&1`, requires: "curl", trigger: /.*/, category: "recon" },
+  { tool: "Nmap Fast", cmd: h => `nmap -T4 -F --open ${h} 2>/dev/null`, requires: "nmap", trigger: /.*/, category: "recon" },
+  { tool: "SSL Cert", cmd: h => `echo | openssl s_client -servername ${h} -connect ${h}:443 2>/dev/null | openssl x509 -noout -text 2>/dev/null | grep -E 'Issuer:|Not After|DNS:' | head -8`, requires: "openssl", trigger: /443|https/i, category: "recon" },
+  { tool: "WhatWeb", cmd: h => `whatweb ${h} --no-errors 2>/dev/null | head -5`, requires: "whatweb", trigger: /http|80|443|8080/i, category: "recon" },
+  { tool: "Nmap Full", cmd: h => `nmap -T4 -sV -p- --script=vuln ${h} 2>/dev/null | head -60`, requires: "nmap", trigger: /open|ssh|http|mysql/i, category: "vuln" },
+  { tool: "Nikto", cmd: h => `nikto -h ${h} -Tuning 123 -timeout 30 2>/dev/null | head -30`, requires: "nikto", trigger: /http|80|443|8080|nginx|apache/i, category: "vuln" },
+  { tool: "SQLMap Probe", cmd: h => `sqlmap -u "http://${h}/" --batch --level=1 --risk=1 --timeout=30 2>/dev/null | head -20`, requires: "sqlmap", trigger: /http|80|443|8080|mysql|3306|php/i, category: "exploit" },
+  { tool: "Dirsearch", cmd: h => `dirsearch -u http://${h}/ -e php,html,js --timeout=30 2>/dev/null | head -15`, requires: "dirsearch", trigger: /http|80|443|8080/i, category: "exploit" },
+  { tool: "Subfinder", cmd: h => `subfinder -d ${h} -silent 2>/dev/null | head -10`, requires: "subfinder", trigger: /\.(com|org|net|cn|io)/i, category: "recon" },
+];
 
 export default defineEventHandler(async (event) => {
   const apiKey = useRuntimeConfig(event).deepseekApiKey;
-  if (!apiKey || apiKey === "sk-your-key-here") {
-    throw createError({ statusCode: 401, statusMessage: "请在 .env 中配置 NUXT_DEEPSEEK_API_KEY" });
-  }
+  if (!apiKey || apiKey === "sk-your-key-here") throw createError({ statusCode: 401, statusMessage: "请配置 NUXT_DEEPSEEK_API_KEY" });
 
-  const body = await readBody(event);
-  const { url: rawUrl, template, skills } = body as { url: string; template: string; skills: string[] };
+  const { url: rawUrl } = await readBody(event) as { url: string; template?: string; skills?: string[] };
+  if (!rawUrl) throw createError({ statusCode: 400, statusMessage: "缺少 URL" });
 
-  if (!rawUrl) throw createError({ statusCode: 400, statusMessage: "缺少目标 URL" });
-
-  // normalize URL
   let host = rawUrl.trim();
   if (!/^https?:\/\//i.test(host)) host = "https://" + host;
-  const parsed = new URL(host);
-  const target = parsed.hostname;
+  const target = new URL(host).hostname;
 
-  const templateLabels: Record<string, string> = {
-    full: "全面合规审计 (Full Security Audit)",
-    static: "静态代码风险查杀 (Static Code Review)",
-    recon: "资产情报搜集 (Reconnaissance Mode)",
-  };
+  const toolsAvailable: string[] = [];
+  const log: { step: number; tool: string; action: string; output: string; decision: string }[] = [];
+  let allFindings = "";
+  let stepNum = 0;
 
-  // ── Phase 1: Real basic reconnaissance ──
-  const findings: string[] = [];
-  findings.push(`=== 真实侦察数据 (Real Reconnaissance) ===`);
-  findings.push(`目标: ${target}`);
-  findings.push(`协议: ${parsed.protocol}`);
-  findings.push(`时间: ${new Date().toISOString()}\n`);
+  // ── AUTONOMOUS AGENT LOOP ──
+  let context = `目标: ${target}\n`;
 
-  // DNS resolution
+  for (const step of STEPS) {
+    // Decision: should we run this step?
+    const installed = has(step.requires);
+    if (!installed) continue;
+
+    const triggered = step.trigger ? step.trigger.test(context) : true;
+    if (!triggered) continue;
+
+    toolsAvailable.push(step.tool);
+    stepNum++;
+
+    const decision = stepNum <= 2 ? "基础侦察 — 必须执行"
+      : step.trigger?.test(allFindings) ? `检测到匹配条件 "${step.trigger.source.slice(1, -1)}" — 自动触发`
+      : "基于上下文跳过";
+
+    log.push({ step: stepNum, tool: step.tool, action: decision, output: "", decision });
+
+    // Execute
+    const cmd = step.cmd(target);
+    const output = exec(cmd);
+    log[log.length - 1].output = output.slice(0, 3000);
+
+    allFindings += `\n--- ${step.tool} ---\n${output.slice(0, 1000)}\n`;
+    context = allFindings.slice(-3000);
+
+    // If we have enough data, break early
+    if (stepNum >= 6 && allFindings.length > 5000) break;
+  }
+
+  // ── AI Final Analysis ──
+  const aiPrompt = `你是墨甲编排器自主安全扫描代理。以下是对 ${target} 的完整自主扫描结果。
+代理自动决策并执行了 ${stepNum} 个步骤: ${log.map(l => l.tool).join(" → ")}。
+
+扫描数据:\n${allFindings.slice(0, 6000)}
+
+请生成最终安全评估报告。每条以 [分类] 开头，包含风险等级(🔴严重/🟠高危/🟡中危/🟢低危/🔵信息)和建议。基于真实数据，不编造。`;
+
+  let analysis = "";
   try {
-    const dnsStart = Date.now();
-    const resp = await fetch(`${parsed.protocol}//${target}/`, {
-      method: "GET",
-      headers: { "User-Agent": "Mojia-Scanner/1.0" },
-      signal: AbortSignal.timeout(10000),
-      redirect: "follow",
+    const resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ model: "deepseek-chat", messages: [{ role: "user", content: aiPrompt }], temperature: 0.3, max_tokens: 4096 }),
     });
-    const dnsMs = Date.now() - dnsStart;
-
-    findings.push(`[DNS/HTTP] 连接成功 (${dnsMs}ms)`);
-    findings.push(`  HTTP 状态码: ${resp.status} ${resp.statusText}`);
-    findings.push(`  Content-Type: ${resp.headers.get("content-type") || "未知"}`);
-    findings.push(`  Server: ${resp.headers.get("server") || "未暴露"}`);
-    findings.push(`  X-Powered-By: ${resp.headers.get("x-powered-by") || "未暴露"}`);
-
-    // Security headers check
-    const secHeaders = [
-      "strict-transport-security",
-      "content-security-policy",
-      "x-frame-options",
-      "x-content-type-options",
-      "referrer-policy",
-      "permissions-policy",
-    ];
-    const missingHeaders: string[] = [];
-    for (const h of secHeaders) {
-      if (!resp.headers.get(h)) missingHeaders.push(h);
+    if (resp.ok) {
+      const data = await resp.json();
+      analysis = data.choices?.[0]?.message?.content || "";
     }
-    if (missingHeaders.length > 0) {
-      findings.push(`  ⚠ 缺少安全头: ${missingHeaders.join(", ")}`);
-    } else {
-      findings.push(`  ✓ 所有安全头已配置`);
-    }
+  } catch { analysis = "AI 分析暂时不可用"; }
 
-    // Cookie check
-    const setCookie = resp.headers.get("set-cookie");
-    if (setCookie) {
-      const insecure = [];
-      if (!setCookie.toLowerCase().includes("httponly")) insecure.push("HttpOnly");
-      if (!setCookie.toLowerCase().includes("secure")) insecure.push("Secure");
-      if (!setCookie.toLowerCase().includes("samesite")) insecure.push("SameSite");
-      if (insecure.length > 0) findings.push(`  ⚠ Cookie 缺少: ${insecure.join(", ")}`);
-    }
-
-    findings.push("");
-  } catch (e: any) {
-    findings.push(`[DNS/HTTP] 连接失败: ${e.message}`);
-    findings.push(`  目标可能不可达或防火墙阻挡`);
-    findings.push("");
-  }
-
-  // SSL certificate check (for HTTPS)
-  if (parsed.protocol === "https:") {
-    try {
-      const tlsResp = await fetch(`${parsed.protocol}//${target}/`, {
-        headers: { "User-Agent": "Mojia-Scanner/1.0" },
-        signal: AbortSignal.timeout(10000),
-      });
-      findings.push(`[SSL/TLS] HTTPS 已启用`);
-      findings.push("");
-    } catch {
-      findings.push(`[SSL/TLS] SSL 握手失败`);
-      findings.push("");
-    }
-  }
-
-  // ── Phase 2: Build AI prompt with real data ──
-  const systemPrompt = `你是一个网络安全专家 AI，名为"墨甲编排器"。
-
-你对目标 "${target}" 执行「${templateLabels[template] || template}」安全扫描。
-
-以下是对该目标的 **真实侦察数据**（非模拟），请基于这些真实数据进行安全分析。
-
-如果连接失败，请基于域名和常见攻击模式给出建议。
-
-请根据以下技能框架进行分析：
-
-${(skills || []).slice(0, 25).map((s, i) => `${i + 1}. ${s}`).join("\n")}
-
-回复格式：每条以 [分类标签] 开头，包含真实数据引用、风险等级、修复建议。
-风险等级: 🔴严重 🟠高危 🟡中危 🟢低危 🔵信息
-
-不要做任何模拟假设。如果真实数据显示连接失败，请指出来并给出原因和建议。`;
-
-  const userPrompt = findings.join("\n") + `\n请对上述真实侦察数据进行安全分析。`;
-
-  // ── Phase 3: Call DeepSeek ──
-  const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: "deepseek-chat",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      temperature: 0.3, max_tokens: 4096, stream: false,
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw createError({ statusCode: response.status, statusMessage: `DeepSeek API 错误: ${err}` });
-  }
-
-  const data = await response.json();
-  const aiResult = data.choices?.[0]?.message?.content || "无响应";
-
-  // Return: raw findings + AI analysis
   return {
-    target,
-    template: templateLabels[template],
-    findings: findings.join("\n"),   // real scan data
-    analysis: aiResult,              // AI interpretation
-    model: data.model,
-    usage: data.usage,
+    target, steps: stepNum,
+    pipeline: log.map(l => `[${l.tool}] ${l.action}`).join(" → "),
+    toolsUsed: [...new Set(toolsAvailable)],
+    findings: allFindings,
+    agentLog: log,
+    analysis,
   };
 });
