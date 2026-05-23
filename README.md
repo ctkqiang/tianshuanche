@@ -1,5 +1,7 @@
 # 天枢安册 · TianshuAnce
 
+!()[./figure/demo.png]
+
 > 墨甲编排器 (Mojia Orchestrator) — 自主安全扫描代理引擎
 
 ## 概念验证 (Proof of Concept)
@@ -10,14 +12,14 @@
 
 ## 技术栈
 
-| 层面 | 技术 |
-|------|------|
-| 框架 | Nuxt 4 + Vue 3 Composition API |
-| UI | Nuxt UI v4 + Tailwind CSS |
-| 图标 | @iconify-json/lucide |
-| AI 引擎 | DeepSeek API (OpenAI 兼容) |
+| 层面     | 技术                                       |
+| -------- | ------------------------------------------ |
+| 框架     | Nuxt 4 + Vue 3 Composition API             |
+| UI       | Nuxt UI v4 + Tailwind CSS                  |
+| 图标     | @iconify-json/lucide                       |
+| AI 引擎  | DeepSeek API (OpenAI 兼容)                 |
 | 安全工具 | nmap, sqlmap, nikto, whatweb, dirsearch 等 |
-| 运行时 | Bun |
+| 运行时   | Bun                                        |
 
 ## 快速开始
 
@@ -85,20 +87,20 @@ tianshuanche/
 
 系统启动时自动检测以下工具是否已安装：
 
-| 工具 | 类别 | 用途 |
-|------|------|------|
-| nmap | 侦察 | 端口扫描与服务识别 |
-| masscan | 侦察 | 大规模 IP 端口扫描 |
-| sqlmap | 漏洞利用 | SQL 注入自动化 |
-| nikto | 防御 | Web 服务器扫描 |
-| whatweb | 侦察 | Web 技术栈指纹识别 |
-| nuclei | CVE | 模板化漏洞扫描 |
-| dirsearch | 侦察 | Web 路径爆破 |
-| wafw00f | 防御 | WAF 检测 |
-| subfinder | 侦察 | 子域名发现 |
-| dig | 侦察 | DNS 查询 |
-| whois | 侦察 | 域名注册信息 |
-| openssl | 加密 | SSL/TLS 证书分析 |
+| 工具      | 类别     | 用途               |
+| --------- | -------- | ------------------ |
+| nmap      | 侦察     | 端口扫描与服务识别 |
+| masscan   | 侦察     | 大规模 IP 端口扫描 |
+| sqlmap    | 漏洞利用 | SQL 注入自动化     |
+| nikto     | 防御     | Web 服务器扫描     |
+| whatweb   | 侦察     | Web 技术栈指纹识别 |
+| nuclei    | CVE      | 模板化漏洞扫描     |
+| dirsearch | 侦察     | Web 路径爆破       |
+| wafw00f   | 防御     | WAF 检测           |
+| subfinder | 侦察     | 子域名发现         |
+| dig       | 侦察     | DNS 查询           |
+| whois     | 侦察     | 域名注册信息       |
+| openssl   | 加密     | SSL/TLS 证书分析   |
 
 ## 许可证
 
@@ -118,14 +120,14 @@ This project is currently in proof-of-concept stage. It implements a DeepSeek AI
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | Nuxt 4 + Vue 3 Composition API |
-| UI | Nuxt UI v4 + Tailwind CSS |
-| Icons | @iconify-json/lucide |
-| AI Engine | DeepSeek API (OpenAI compatible) |
+| Layer          | Technology                                    |
+| -------------- | --------------------------------------------- |
+| Framework      | Nuxt 4 + Vue 3 Composition API                |
+| UI             | Nuxt UI v4 + Tailwind CSS                     |
+| Icons          | @iconify-json/lucide                          |
+| AI Engine      | DeepSeek API (OpenAI compatible)              |
 | Security Tools | nmap, sqlmap, nikto, whatweb, dirsearch, etc. |
-| Runtime | Bun |
+| Runtime        | Bun                                           |
 
 ## Quick Start
 
@@ -193,20 +195,20 @@ tianshuanche/
 
 System auto-detects the following tools on startup:
 
-| Tool | Category | Purpose |
-|------|----------|---------|
-| nmap | Recon | Port scanning & service detection |
-| masscan | Recon | Mass IP port scanning |
-| sqlmap | Exploit | SQL injection automation |
-| nikto | Defense | Web server scanner |
-| whatweb | Recon | Web tech stack fingerprinting |
-| nuclei | CVE | Template-based vulnerability scanning |
-| dirsearch | Recon | Web path brute-forcing |
-| wafw00f | Defense | WAF detection |
-| subfinder | Recon | Subdomain discovery |
-| dig | Recon | DNS lookup |
-| whois | Recon | Domain registration info |
-| openssl | Crypto | SSL/TLS certificate analysis |
+| Tool      | Category | Purpose                               |
+| --------- | -------- | ------------------------------------- |
+| nmap      | Recon    | Port scanning & service detection     |
+| masscan   | Recon    | Mass IP port scanning                 |
+| sqlmap    | Exploit  | SQL injection automation              |
+| nikto     | Defense  | Web server scanner                    |
+| whatweb   | Recon    | Web tech stack fingerprinting         |
+| nuclei    | CVE      | Template-based vulnerability scanning |
+| dirsearch | Recon    | Web path brute-forcing                |
+| wafw00f   | Defense  | WAF detection                         |
+| subfinder | Recon    | Subdomain discovery                   |
+| dig       | Recon    | DNS lookup                            |
+| whois     | Recon    | Domain registration info              |
+| openssl   | Crypto   | SSL/TLS certificate analysis          |
 
 ## License
 
